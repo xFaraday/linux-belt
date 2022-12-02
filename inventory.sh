@@ -137,11 +137,11 @@ function banner() {
        \CSUSBCSU${RED}SBCSU${BLUE}SB${RED}CSUSB${BLUE}CSUSBCSU/.
         \CSUSBCSUSBCSUSBCSUSBCSUSBC/.
               ${RED}\CSUSBCSUSBCSUS${RED}/${DG}.
-              ${WHITE}V${RED}\\${BLUE}CSUSBCSUSBCS${RED}/${WHITE}V${DG}.
-               ${WHITE}V${RED}\\${BLUE}CSUSBCSUSB${RED}/${WHITE}V${DG}.
-                ${WHITE}V${RED}\\${BLUE}CSUSBCSU${RED}/${WHITE}V${DG}.
-                 ${WHITE}V${RED}\\${BLUE}CSUSBC${RED}/${WHITE}V${DG}.
-                  ${WHITE}V${RED}\\${BLUE}CSUS${RED}/${WHITE}V${DG}.${WHITE}=\\${DG}      ~
+              ${WHITE}V${RED}\\${DG}CSUSBCSUSBCS${RED}/${WHITE}V${DG}.
+               ${WHITE}V${RED}\\${DG}CSUSBCSUSB${RED}/${WHITE}V${DG}.
+                ${WHITE}V${RED}\\${DG}CSUSBCSU${RED}/${WHITE}V${DG}.
+                 ${WHITE}V${RED}\\${DG}CSUSBC${RED}/${WHITE}V${DG}.
+                  ${WHITE}V${RED}\\${DG}CSUS${RED}/${WHITE}V${DG}.${WHITE}=\\${DG}      ~
                    ${WHITE}V${RED}\**/${WHITE}V${DG}.${WHITE}\\==\\${DG}   ~
                            ${WHITE}\\==\\${DG}    ~
                             ${WHITE}\\==\\${DG} ~
@@ -395,17 +395,12 @@ GetIP() {
 }
 
 GetUsers() {
-	users=$(grep 'sh$' /etc/passwd | tr ':' ' ')
+	users=$(grep 'sh$' /etc/passwd)
+	names=$(echo $users | cut -d':' -f1)
+	uid=$(echo $users | cut -d':' -f3)
+	length=$(echo $users | wc -l)
+	
 
-	printf "$users" | gawk '
-	BEGIN { ORS = ""; print ""}
-	/Filesystem/ {next}
-	{ printf "%s{\"username\": \"%s\", \"uid\": \"%s\", \"home_dir\": \"%s\"}",
-		separator, $1, $3, $5
-	separator = ", "
-	}
-	END { print "" }
-	'
 }
 
 function dockercheck() {
@@ -422,45 +417,24 @@ function dockercheck() {
 }
 
 PostToServ() {
-	#webserv="10.123.80.115:5000/api/v1/common/inventory"
-	webserv="httpbin.org/post"
+	webserv="$ip:10000/api/v1/common/inventory"
 	postdata=$1
 	echo $postdata | jq 
 	if [ -x $(which curl) ]; then
 		#add custom user agent
-		curl -H 'Content-Type: application/json' -d "$postdata" https://${webserv} --insecure
+		curl -H 'Content-Type: application/json' -H "User-Agent: $useragent" -d "$postdata" https://${webserv} --insecure
 	else 
-		wget --post-data "$postdata" https://${webserv} #--no-check-certificate
+		wget --post-data "$postdata" --user-agent "$useragent" https://${webserv} --no-check-certificate
 	fi
 }
 
 DSuck() {
-	#containers = [
-	#	{
-	#		"container_id": "test",
-	#		"image": "test",
-	#		"status": "",
-	#	}
-	#]
-	#
-	docs=$(docker ps -a --format "{{.ID}} {{.Image}} {{.Status}}")
+	docs=$(docker ps -a)
 	if [[ -z "$docs" ]]; then
 		printf "null"
 	else 
-		IDs=$(printf "$docs" | awk '{print $1}')
-		images=$(printf "$docs" | awk '{print $2}')
-		status=$(printf "$docs" | awk '{print $3}')
-		#printf "$IDs\n$images\n$status\n"
-		
-		printf "$docs" | gawk '
-		BEGIN { ORS = ""; print ""}
-    	/Filesystem/ {next}
-    	{ printf "%s{\"container_id\": \"%s\", \"image\": \"%s\", \"status\": \"%s\"}",
-          separator, $1, $2, $3
-      	separator = ", "
-    	}
-    	END { print "" }
-		'
+		var=$(echo $docs | cut -d' ' -f1,4)
+		echo $var
 	fi
 }
 
@@ -472,43 +446,33 @@ function ExportToJSON() {
 		for i in $IPS; do
 			IP+="$i-:-"
 		done
-	else
-		IP+=$IPS
+		IP=$IPS
 	fi
-
+	
 	docks=""
-	if [ ! -x "$(command -v Docker)" ]; then
+	if [ -x "$(command -v Docker)" ]; then
+  		echo 'Error: Docker is not installed.'
+  	else 
+  		echo 'Docker installed'
 		dockerCon=$(DSuck)
-		docks+=$dockerCon
 	fi
 
 	printf "\n\n${BLUE}Exporting to JSON...\n\n${NC}"
-	JSON='{"name":"%s","hostname":"%s","ip":"%s","OS":"%s","services":[%s], "containers":[%s], "users":[%s]}'
+	JSON='{"name":"%s","hostname":"%s","ip":"%s","OS":"%s","services":[%s]}'
 	#create array with format of
 	#\{ "port": 80, "service": "http"},
 	#from the cracked lsof function
-
 	hostname=$(hostname)
-
 	nameIP=$(echo $IPS | rev | cut -d '.' -f1 | rev)
-
 	name="host-$nameIP"
-
 	services=$(ports "json")
-
-	#@TODO: !get groups for each user!
-	#
-	#
-	#
-	users=$(GetUsers)
-
 	#echo -e "${services::-1}\n\n"
 	if [[ $(echo -e "${services}" | wc -l) -gt 0 ]]; then
-		postdata=$(printf "$JSON" "$name" "$hostname" "$IP" "$OS" "${services::-1}" "$docks" "$users")
+		postdata=$(printf "$JSON" "$name" "$hostname" "$IPS" "$OS" "${services::-1}")
 		PostToServ "$postdata"
 	else 
 		$services='{"port": "NULL", "service": "NULL"}'
-		postdata=$(printf "$JSON" "$name" "$hostname" "$IP" "$OS" "$services" "$docks" "$users")
+		postdata=$(printf "$JSON" "$name" "$hostname" "$IPS" "$OS" "$services")
 		PostToServ "$postdata"
 	fi
 }
@@ -530,6 +494,9 @@ function ExportToJSON() {
 #	esac
 #done
 #host
-#banner
+#ExportToJSON
+#DSuck
+banner
+ip=$1
+useragent=$2
 ExportToJSON
-#GetUsers
