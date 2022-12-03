@@ -4,6 +4,8 @@ if [ "$EUID" -ne 0 ]; then
         exit 1
 fi
 interface=$(ip addr show | grep "[1-9]" | grep -v "link/ether" | grep -v "inet6" | grep "state UP" | awk {'print $2'} | sed 's/://')
+ip link set dev $interface promisc on
+ethtool -K $interface gro off lro off
 manager_detection(){
         if [ $(command -v apt) ]; then
                 apt update
@@ -31,8 +33,8 @@ manager_detection(){
 }
 container_install(){
 	echo 'Installing Snort container for you, pumpkin <3'
-	docker pull plinton/docker-snort:latest
-	docker run -it --rm --net=host linton/docker-snort /bin/bash -c "snort -i $interface -c /etc/snort/etc/snort.conf -A console"
+	docker pull l3m0n42/snockerv3
+	docker run -it --rm --net=host -d l3m0n42/snockerv3 /bin/bash -c "snort -Q -i $interface -R /usr/local/snort3.rules -c /etc/snort/etc/snort.conf --daq afpacket --daq_mode=inline"
 }
 manager_detection
 container_install
