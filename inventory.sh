@@ -477,26 +477,25 @@ function ExportToJSON() {
 	fi
 }
 
-#while getopts 'banner:host:user:login:ports:services:cron:log:file:all' option; do
-#	case "$option" in
-#		b)banner; exit 0 ;;
-#		v)host; exit 0 ;;
-#		u)user; exit 0 ;;
-#		l)login; exit 0 ;;
-#		p)ports; exit 0 ;;
-#		s)service; exit 0 ;;
-#		c)cron; exit 0 ;;
-#		o)dockercheck; exit 0 ;;
-#		g)log; exit 0 ;;
-#		f)file; exit 0 ;;
-#		a)a= banner; host; user; login; ports; service; cron; dockercheck; log; file; exit 0;;
-#		h) usage; exit 0;;
-#	esac
-#done
-#host
+#banner
+#ip=$1
+#useragent=$2
 #ExportToJSON
-#DSuck
-banner
-ip=$1
-useragent=$2
-ExportToJSON
+
+while getopts 'banner:host:user:login:ports:services:cron:log:file:all:ExportToJSON' option; do
+	case "$option" in
+		b)banner; exit 0 ;;
+		v)host; exit 0 ;;
+		u)user; exit 0 ;;
+		l)login; exit 0 ;;
+		p)ports; exit 0 ;;
+		s)service; exit 0 ;;
+		c)cron; exit 0 ;;
+		o)dockercheck; exit 0 ;;
+		g)log; exit 0 ;;
+		f)file; exit 0 ;;
+		e)ExportToJSON; exit 0 ;;
+		a)a= banner; host; user; login; ports; service; cron; dockercheck; log; file; exit 0 ;;
+		h) usage; exit 0 ;;
+	esac
+done
