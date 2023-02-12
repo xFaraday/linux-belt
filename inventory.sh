@@ -107,16 +107,17 @@ print_info(){
 
 function usage() {
 	banner
-	printf -- "-v =  host infomration\n"
-	printf -- "-u =  user infomration\n"
-	printf -- "-l =  lastlog\n"
-	printf -- "-p =  port information\n"
-	printf -- "-s =  service information\n"
-	printf -- "-c =  cron information\n"
-	printf -- "-g =  log information\n"
-	printf -- "-f =  file information\n"
-	printf -- "-a =  all information\n"
-	printf -- "-h = help\n"
+	printf -- "\n\t-a =  all information\n"
+	printf -- "\n\t-e =  SEND TO WEBSERVER. Ex: ./inventory.sh -e <IP> <useragent>\n"
+	printf -- "\n\t-v =  host information\n"
+	printf -- "\n\t-u =  user information\n"
+	printf -- "\n\t-l =  lastlog\n"
+	printf -- "\n\t-p =  port information\n"
+	printf -- "\n\t-s =  service information\n"
+	printf -- "\n\t-c =  cron information\n"
+	printf -- "\n\t-g =  log information\n"
+	printf -- "\n\t-f =  file information\n"
+	printf -- "\n\t-h = help\n"
 }
 
 function banner() {
@@ -157,11 +158,11 @@ function banner() {
 	printf "\n${BLUE}BLUE TEAM INVENTORY\n\n${NC}"
 }
 function spacer () {
-	printf "\n\n############################ $1 ############################\n\n"
+	printf "\n\n${GREEN}############################${NC} $1 ${GREEN}############################${NC}\n\n"
 }
 
 function smallspacer () {
-	printf "\n############## $1 ##############\n"
+	printf "\n\n${GREEN}##############${NC} $1 ${GREEN}##############${NC}\n"
 }
 
 function host() {
@@ -197,32 +198,55 @@ function user() {
 	users=$(grep 'sh$' /etc/passwd)
 	section="${BLUE}Users that can login${NC}"
 	smallspacer "$section"
-	printf "$users"
+	#printf "$users"
+	for i in $users; do
+		u=$(echo $i | cut -d: -f1)
+		echo "${RED}$u${NC}"
+		printf "\t$i\n"
+	done
+
 
 	if [ -f /etc/sudoers ] ; then
-		section="${BLUE}Users in Sudoers File${NC}"
+		section="${BLUE}Sudoers File${NC}"
 		smallspacer "$section"
 		awk '!/#(.*)|^$/' /etc/sudoers
 	fi 
 
-	if ! [ -z "grep sudo /etc/group" ]; then
-		section="${BLUE}Users in sudo group${NC}"
-		smallspacer "$section"
-		grep -Po '^sudo.+:\K.*$' /etc/group
-		section="${BLUE}Users in admin group${NC}"
-		smallspacer "$section"
-		grep -Po '^admin.+:\K.*$' /etc/group
-		section="${BLUE}Users in wheel group${NC}"
-		smallspacer "$section"
-		grep -Po '^wheel.+:\K.*$' /etc/group
-	fi
+	#if ! [ -z "grep sudo /etc/group" ]; then
+	#	section="${BLUE}Users in sudo group${NC}"
+	#	smallspacer "$section"
+	#	grep -Po '^sudo.+:\K.*$' /etc/group
+	#	section="${BLUE}Users in admin group${NC}"
+	#	smallspacer "$section"
+	#	grep -Po '^admin.+:\K.*$' /etc/group
+	#	section="${BLUE}Users in wheel group${NC}"
+	#	smallspacer "$section"
+	#	grep -Po '^wheel.+:\K.*$' /etc/group
+	#fi
+	#!/bin/bash
+
+	GroupsWithSudo=$(grep -E '^%' /etc/sudoers)
+	
+	section="${BLUE}Groups in Sudoers File${NC}"
+	smallspacer "$section"
+
+	for i in $GroupsWithSudo; do
+		if [[ $(echo $i | grep -Eo '%') ]]; then
+			echo "Group with Sudo permission: ${RED}$i${NC}"
+			group=$(echo $i | cut -d'%' -f2)
+			users=$(grep -E "^$group" /etc/group)
+			userswithsudo=$(echo $users | rev | cut -d':' -f1 | rev)
+			printf "\tUsers a part of $group:\n"
+			printf "\t${RED}$userswithsudo${NC}\n"
+		fi
+	done
 }
 
 function login() {
 	section="${BLUE}Login Information${NC}"
 	smallspacer "$section"
 
-	printf "$(lastlog)\n\n"
+	#printf "$(lastlog)\n\n"
 
 	printf "$(w)\n\n"
 }
@@ -341,9 +365,20 @@ function cron() {
 function log() {
 	section="${BLUE}LOGS${NC}"
 	spacer "$section"
-
-	#add log section
-		
+	# Use the find command to search for files recursively
+	
+	#HANGING FOR SOME REASON BRUH
+	#files=$(find /var/log -type f)
+	#for i in $files; do
+	#	type=$(file "$i" | awk -F: '{print $2}')
+		# Check if the file is a regular file and if it contains ASCII text
+	#	if [ -f $i ] && [[ "$type" == *"ASCII text"* ]]; then
+		#NameOfFile=$(echo $file | rev | cut -d'/' -f1 | rev)
+		#printf "\t${RED}$NameOfFile${NC}\n"
+		#printf "\t\t$file\n\n"
+	#		echo "$i"
+	#	fi
+	#done	
 }
 
 function dockerenum() {
@@ -399,19 +434,18 @@ GetUsers() {
 	names=$(echo $users | cut -d':' -f1)
 	uid=$(echo $users | cut -d':' -f3)
 	length=$(echo $users | wc -l)
-	
-
 }
 
 function dockercheck() {
-	#section="${BLUE}DOCKER${NC}"
-	#spacer "$section"
+	section="${BLUE}DOCKER${NC}"
+	spacer "$section"
 
 	if [ -x "$(command -v Docker)" ]; then
   		echo 'Error: Docker is not installed.'
   		return 1
   	else 
   		echo 'Docker installed'
+  		dockerenum
   		return 0
 	fi
 }
@@ -477,9 +511,11 @@ function ExportToJSON() {
 	fi
 }
 
+
+
 #banner
-#ip=$1
-#useragent=$2
+ip=$2
+useragent=$3
 #ExportToJSON
 
 while getopts 'banner:host:user:login:ports:services:cron:log:file:all:ExportToJSON' option; do
@@ -499,3 +535,8 @@ while getopts 'banner:host:user:login:ports:services:cron:log:file:all:ExportToJ
 		h) usage; exit 0 ;;
 	esac
 done
+
+if [[ "$#" -eq 0 ]]; then
+	usage
+	exit 0
+fi
