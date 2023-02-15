@@ -5,15 +5,17 @@ second="$1"
 third='” port=”514” protocol=”udp”)'
 
 secondfirst='*.* @'
-secondsecond='$1'
+secondsecond="$1"
 
 final="${first}${second}${third}"
-secondfinal='${secondfirst}${secondsecond}'
+secondfinal="${secondfirst}${secondsecond}"
 
 var=$(systemctl is-active rsyslog)
 if [[ "$var" == "active" || -w /etc/rsyslog.conf ]]; then
 	echo "$secondfinal" >> /etc/rsyslog.conf
 	echo "$final" >> /etc/rsyslog.conf
+	systemctl unmask rsyslog
+	systemctl restart rsyslog
 	systemctl enable rsyslog
 	systemctl mask rsyslog
 else 
