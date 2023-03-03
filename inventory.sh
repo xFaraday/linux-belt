@@ -223,8 +223,6 @@ function user() {
 	#	smallspacer "$section"
 	#	grep -Po '^wheel.+:\K.*$' /etc/group
 	#fi
-	#!/bin/bash
-
 	GroupsWithSudo=$(grep -E '^%' /etc/sudoers)
 	
 	section="${BLUE}Groups in Sudoers File${NC}"
@@ -412,6 +410,48 @@ function file() {
 #					                     #
 #########################################
 
+function CompileUserInfo() {
+	#For CCDC user stuff:
+        # Username
+        # Fullname
+        # Enabled
+        # Locked
+        # Admin
+        # Passwdexpired
+        # CantChangePasswd 
+        # Passwdage
+        # Lastlogon
+        # BadPasswdAttempts
+        # NumofLogons
+        users=$(cat /etc/passwd)
+        for i in $users; do
+                userline=$(grep "$i" /etc/passwd)
+				#username
+				username=$(echo "$i" | cut -d':' -f1)
+                #fullname
+				realname=$(echo "$i" | cut -d':' -f5)
+				#enabled
+				enabledpre=$(grep "$i" /etc/passwd | grep 'sh$' && echo "true")
+				enabled=$(echo "$enabledpre" | cut -d' ' -f2)
+				#locked
+				lockedpre=$(grep "$i" /etc/passwd | grep "nologin" && echo "true" || grep "$i" /etc/passwd | cut -d':' -f2 | grep -o "*" && echo "true")
+				locked=$(echo "$lockedpre" | cut -d' ' -f2)
+
+				
+                #for no login, get second field and do or check on shell
+                #same for locked
+                #admin invoke other function for checking through sudoers and group, or create modified
+                #passwdexpired check /etc/shadow
+                cantchangepasswd='null'
+                passwordage='null'
+                lastlogon=$(lastlog -u $i | tail -n 1 | rev | cut -d' ' -f1-7 | rev)
+                #other lastlog stuff to get passwd attempts or use grep
+                #same for this
+				printf "{}"
+        done
+
+}
+
 GetOS() {
 	if [ -x $(which hostnamectl) ]; then
 		OS=$(hostnamectl | grep "Operating System" | cut -d':' -f2)
@@ -490,6 +530,10 @@ function ExportToJSON() {
   		echo 'Docker installed'
 		dockerCon=$(DSuck)
 	fi
+
+	
+
+
 
 	printf "\n\n${BLUE}Exporting to JSON...\n\n${NC}"
 	JSON='{"name":"%s","hostname":"%s","ip":"%s","OS":"%s","services":[%s]}'
