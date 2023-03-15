@@ -499,13 +499,13 @@ function CompileUserInfo() {
 			userinfoblock+="\"Fullname\":\"$realname\","
 			#enabled
 			enabledpre=$(echo "$i" | grep 'sh$' 1>/dev/null && echo -n "true" || echo -n "false")
-			userinfoblock+="\"Enabled\":\"$enabledpre\","
+			userinfoblock+="\"Enabled\":$enabledpre,"
 			#locked
 			locked=$(LockedCheck "$i")
-			userinfoblock+="\"Locked\":\"$locked\","
+			userinfoblock+="\"Locked\":$locked,"
 
 			adminstatus=$(UserAdminCheck $username)
-			userinfoblock+="\"Admin\":\"$adminstatus\","
+			userinfoblock+="\"Admin\":$adminstatus,"
 
 			passwdexpired=$(PasswdExpiredCheck $username)
 			userinfoblock+="\"Passwdexpired\":\"$passwdexpired\","
@@ -582,13 +582,20 @@ PostToServ() {
 }
 
 DSuck() {
-	docs=$(docker ps -a)
-	if [[ -z "$docs" ]]; then
-		printf "null"
-	else 
-		var=$(echo $docs | cut -d' ' -f1,4)
-		echo $var
-	fi
+	#or docker ps --format "{{.ID}}"
+	docinfo=""
+	for i in $(docker ps | awk '{print $1}' | grep -vi "container"); do
+		jname=$(docker inspect --format='{{.Config.Image}}' $i)
+		jstatus=$(docker inspect --format='{{.State.Status}}' $i)
+		jhealth=$(docker inspect --format='{{.State.Health.Status}}' $i)
+		jID=$(echo $i)
+		cmds=$(docker inspect --format='{{.Config.Cmd}}' $i)
+		jcmds=$(echo ${cmds::-1} | cut -b 2-)
+		ports=$(docker inspect --format='{{.NetworkSettings.Ports}}' $i)
+		jports=$(echo ${ports::-1} | cut -b 5-)
+		docinfo+="{\"name\":\"$jname\",\"status\":\"$jstatus\",\"health\":\"$jhealth\",\"id\":\"$jID\",\"cmd\":\"$jcmds\",\"ports\":\"$jports\"},"
+	done
+	echo -n "$docinfo"
 }
 
 function ExportToJSON() {
@@ -601,29 +608,24 @@ function ExportToJSON() {
 		done
 		IP=$IPS
 	fi
-	
-	docks=""
-	if [ -x "$(command -v Docker)" ]; then
-  		echo 'Error: Docker is not installed.'
-  	else 
-  		echo 'Docker installed'
-		dockerCon=$(DSuck)
-	fi
-
 
 	printf "\n\n${BLUE}Exporting to JSON...\n\n${NC}"
-	JSON='{"name":"%s","hostname":"%s","ip":"%s","OS":"%s","services":[%s], "users": [%s]}'
-	#create array with format of
-	#\{ "port": 80, "service": "http"},
-	#from the cracked lsof function
+	#json format with or without docker containers
+	which docker 1>/dev/null 2>&1 && JSON='{"name":"%s","hostname":"%s","ip":"%s","OS":"%s","services":[%s], "containers":[%s], "users": [%s]}' || JSON='{"name":"%s","hostname":"%s","ip":"%s","OS":"%s","services":[%s], "users": [%s]}'
+
+
+	#FOR SHARES JUST WAIT TO SEE IF PARSING CAN BE DIFFERENT FOR LINUX
+	#then just grep through /etc/samba/smb.conf and smbclient tools
+
 	hostname=$(hostname)
 	nameIP=$(echo $IPS | rev | cut -d '.' -f1 | rev)
 	name="host-$nameIP"
 	services=$(ports "json")
 	userinfo=$(CompileUserInfo)
+	which docker 1>/dev/null 2>&1 && containerinfo=$(DSuck)
 	#echo -e "${services::-1}\n\n"
 	if [[ $(echo -e "${services}" | wc -l) -gt 0 ]]; then
-		postdata=$(printf "$JSON" "$name" "$hostname" "$IPS" "$OS" "${services::-1}" "${userinfo::-1}")
+		postdata=$(printf "$JSON" "$name" "$hostname" "$IPS" "$OS" "${services::-1}" "${containerinfo::-1}" "${userinfo::-1}")
 		PostToServ "$postdata"
 	else 
 		#$services='{"port": "NULL", "service": "NULL"}'
