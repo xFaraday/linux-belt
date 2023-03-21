@@ -413,7 +413,7 @@ function file() {
 function UserAdminCheck() {
 	user=$1
 	#check if user is in sudoers
-	grep "$user" /etc/sudoers 1>/dev/null
+	grep "^$user" /etc/sudoers 1>/dev/null
 	if [ $? == 0 ]; then
 		printf "true"
 		exit 0
@@ -541,11 +541,18 @@ GetOS() {
 }
 
 GetIP() {
-	cards=$(lshw -class network | grep "logical name:" | sed 's/logical name://')
-	for n in $cards; do
-		ip4=$(/sbin/ip -o -4 addr list $n | awk '{print $4}' | cut -d/ -f1)
+	ipreg=$(echo $2 | cut -d'.' -f1-3)
+	if [[ -z $(which lshw) ]]; then
+		ip4=$(ip -brief a 2>/dev/null | grep -E "$ipreg" | awk '{print $3}' | cut -d'/' -f1 || ifconfig 2>/dev/null | grep -E "$ipreg" | awk '{print $2}')
 		printf "$ip4"
-	done
+	else 
+		cards=$(lshw -class network | grep "logical name:" | sed 's/logical name://')
+		for n in $cards; do
+			ip4=$(/sbin/ip -o -4 addr list $n | awk '{print $4}' | cut -d/ -f1)
+			echo $ip4 | grep -E "$ipreg" 2>/dev/null 
+			printf "$ip4"
+		done
+	fi
 }
 
 GetUsers() {
@@ -624,7 +631,7 @@ function ExportToJSON() {
 	userinfo=$(CompileUserInfo)
 	which docker 1>/dev/null 2>&1 && containerinfo=$(DSuck)
 	#echo -e "${services::-1}\n\n"
-	if [[ $(echo -e "${services}" | wc -l) -gt 0 ]]; then
+	if [[ $(echo -e "${services}" | wc -l) -gt 0 && $(echo -e "${containerinfo}" | wc -l) -gt 0 ]]; then
 		postdata=$(printf "$JSON" "$name" "$hostname" "$IPS" "$OS" "${services::-1}" "${containerinfo::-1}" "${userinfo::-1}")
 		PostToServ "$postdata"
 	else 
