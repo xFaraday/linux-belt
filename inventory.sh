@@ -609,8 +609,8 @@ GetIP() {
 		for n in $cards; do
 			ip4=$(/sbin/ip -o -4 addr list $n | awk '{print $4}' | cut -d/ -f1)
 			echo -n $ip4 | grep -E "$ipreg" 2>/dev/null 
-			exit 0
 		done
+		exit 0
 	fi
 }
 
@@ -700,7 +700,7 @@ function ExportToJSON() {
 	which docker 1>/dev/null 2>&1 && containerinfo=$(DSuck)
 	checkedcontainerinfo=$(PrepareArrays $containerinfo)
 	#echo -e "${services::-1}\n\n"
-	postdata=$(printf "$JSON" "$name" "$hostname" "$IPS" "$OS" "${checkedservices}" "${checkedcontainerinfo}" "${userinfo::-1}")
+	postdata=$(printf "$JSON" "$name" "$hostname" "$IPS" "$OS" "${checkedservices}" "${userinfo::-1}")
 	echo $postdata
 	PostToServ "$postdata"
 }
