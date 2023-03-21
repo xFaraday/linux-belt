@@ -249,6 +249,21 @@ function login() {
 	printf "$(w)\n\n"
 }
 
+function DiscoverListenerTool() {
+	if [ $(which lsof) ]; then
+		printf "lsof"
+		exit 0
+	fi
+	if [ $(which netstat) ]; then
+		printf "netstat"
+		exit 0
+	fi
+	if [ $(which ss) ]; then
+		printf "ss"
+		exit 0
+	fi
+}
+
 function ports() {
 	if [  -z "$1" ]; then
 		section="${BLUE}LISTENING CONNECTIONS${NC}"
@@ -274,28 +289,67 @@ function ports() {
 		fi
 	}
 
+	listeningtool=$(DiscoverListenerTool)
+
+	case "$listeningtool" in
+		"lsof")
+			portlisten=$(lsof -i -P -n | grep LISTEN | awk '{print $9}' | cut -d':' -f2- | sort -u)
+			for i in $portlisten; do
+				tmp=$(expr $i + 1 2>/dev/null)
+				if [ $? == 2 ]; then
+					printf "\n"
+				else
+					if [[ ! -z "$1" ]]; then
+						var=$(lsof -iTCP:$i -sTCP:LISTEN | awk '{print $2}' | tail -n1)
+						printf "{\"port\":$i,"
+						motherprocess "$var"
+					else
+						var=$(lsof -iTCP:$i -sTCP:LISTEN | awk '{print $2}' | tail -n1)
+						printf "\nPort: ${RED}$i${NC} Owning process: $var \n"
+						motherprocess "$var"
+					fi	
+				fi
+			done
+			;;
+		"netstat")
+			var=$(netstat -l -p -n -t -d -e | grep -v "tcp6" | grep "^tcp" | awk '{print $4}')
+			for i in $var; do
+				portfromcut=$(echo $i | cut -d':' -f2)
+				tmp=$(expr $i + 1 2>/dev/null)
+				if [ $? == 2 ]; then
+					printf "\n"
+				else
+					if [[ ! -z "$1" ]]; then
+						var=$(fuser $portfromcut/tcp 2>/dev/null)
+						printf "{\"port\":$portfromcut,"
+						motherprocess "$var"
+					else
+						var=$(fuser $portfromcut/tcp 2>/dev/null)
+						printf "\nPort: ${RED}$portfromcut${NC} Owning process: $var \n"
+						motherprocess "$var"
+					fi	
+				fi
+			done
+			;;
+		"ss")
+			var=$(ss -tlpn -4 | grep LISTEN)
+			while read -r line; do
+				# Extract listening port and PID using awk
+				port=$(echo "$line" | awk '{print $4}')
+				pid=$(echo "$line" | awk -F'[=,]' '{print $3}')
+
+				if [[ ! -z "$1" ]]; then
+					printf "{\"port\":$port,"
+					motherprocess "$pid"
+				else
+					printf "\nPort: ${RED}$port${NC} Owning process: $pid \n"
+					motherprocess "$pid"
+				fi
+			done <<< "$ss_output"
+			;;
+	esac
 	#ports
 	#find open ports lsof -i -P -n | grep LISTEN | awk '{print $9}' | cut -d':' -f2-
-	portlisten=$(lsof -i -P -n | grep LISTEN | awk '{print $9}' | cut -d':' -f2- | sort -u)
-	for i in $portlisten; do
-		tmp=$(expr $i + 1 2>/dev/null)
-		if [ $? == 2 ]; then
-			printf "\n"
-		else
-			#TO DO 
-			#also print the command used for last process, just in case
-			#
-			if [[ ! -z "$1" ]]; then
-				var=$(lsof -iTCP:$i -sTCP:LISTEN | awk '{print $2}' | tail -n1)
-				printf "{\"port\":$i,"
-				motherprocess "$var"
-			else
-				var=$(lsof -iTCP:$i -sTCP:LISTEN | awk '{print $2}' | tail -n1)
-				printf "\nPort: ${RED}$i${NC} Owning process: $var \n"
-				motherprocess "$var"
-			fi	
-		fi
-	done
 }
 #put those ports into lsof -iTCP:53 -sTCP:LISTEN to find process
 #ps -o ppid= -p pid
@@ -446,7 +500,11 @@ function LockedCheck() {
 function PasswdExpiredCheck() {
 	if [[ $(which chage) ]]; then
 		passwdexpires=$(chage -l $1 | grep "Password expires" | cut -d':' -f2)
-		echo -n "$passwdexpires"
+		if [[ $(echo $passwdexpires | grep "never") ]]; then
+			echo -n "false"
+		else
+			echo -n "true"
+		fi
 	fi
 	
 	# ADD this l8er bb girl
@@ -508,9 +566,9 @@ function CompileUserInfo() {
 			userinfoblock+="\"Admin\":$adminstatus,"
 
 			passwdexpired=$(PasswdExpiredCheck $username)
-			userinfoblock+="\"Passwdexpired\":\"$passwdexpired\","
+			userinfoblock+="\"Passwdexpired\":$passwdexpired,"
 			
-			userinfoblock+="\"CantChangePasswd\":\"null\","
+			userinfoblock+="\"CantChangePasswd\":false,"
 
 			lastpasschange=$(LastPassChangeCheck $username)
 			userinfoblock+="\"Passwdage\":\"$lastpasschange\","
@@ -541,16 +599,17 @@ GetOS() {
 }
 
 GetIP() {
-	ipreg=$(echo $2 | cut -d'.' -f1-3)
+	ipreg=$(echo $1 | cut -d'.' -f1-3)
 	if [[ -z $(which lshw) ]]; then
 		ip4=$(ip -brief a 2>/dev/null | grep -E "$ipreg" | awk '{print $3}' | cut -d'/' -f1 || ifconfig 2>/dev/null | grep -E "$ipreg" | awk '{print $2}')
 		printf "$ip4"
+		exit 0
 	else 
 		cards=$(lshw -class network | grep "logical name:" | sed 's/logical name://')
 		for n in $cards; do
 			ip4=$(/sbin/ip -o -4 addr list $n | awk '{print $4}' | cut -d/ -f1)
-			echo $ip4 | grep -E "$ipreg" 2>/dev/null 
-			printf "$ip4"
+			echo -n $ip4 | grep -E "$ipreg" 2>/dev/null 
+			exit 0
 		done
 	fi
 }
@@ -605,16 +664,24 @@ DSuck() {
 	echo -n "$docinfo"
 }
 
+function PrepareArrays() {
+	if [[ $(echo -e "$1" | wc -l) -gt 0 ]]; then
+		printf "${1::-1}"
+	else 
+		printf "$1"
+	fi
+}
+
 function ExportToJSON() {
 	OS=$(GetOS)
 	IP=""
-	IPS=$(GetIP)
-	if [[ $(echo $IPS | wc -l) -gt 1 ]]; then
-		for i in $IPS; do
-			IP+="$i-:-"
-		done
-		IP=$IPS
-	fi
+	IPS=$(GetIP $ip)
+	#if [[ $(echo $IPS | wc -l) -gt 1 ]]; then
+	#	for i in $IPS; do
+	#		IP+="$i-:-"
+	#	done
+	#	IP=$IPS
+	#fi
 
 	printf "\n\n${BLUE}Exporting to JSON...\n\n${NC}"
 	#json format with or without docker containers
@@ -628,17 +695,14 @@ function ExportToJSON() {
 	nameIP=$(echo $IPS | rev | cut -d '.' -f1 | rev)
 	name="host-$nameIP"
 	services=$(ports "json")
+	checkedservices=$(PrepareArrays $services)
 	userinfo=$(CompileUserInfo)
 	which docker 1>/dev/null 2>&1 && containerinfo=$(DSuck)
+	checkedcontainerinfo=$(PrepareArrays $containerinfo)
 	#echo -e "${services::-1}\n\n"
-	if [[ $(echo -e "${services}" | wc -l) -gt 0 && $(echo -e "${containerinfo}" | wc -l) -gt 0 ]]; then
-		postdata=$(printf "$JSON" "$name" "$hostname" "$IPS" "$OS" "${services::-1}" "${containerinfo::-1}" "${userinfo::-1}")
-		PostToServ "$postdata"
-	else 
-		#$services='{"port": "NULL", "service": "NULL"}'
-		postdata=$(printf "$JSON" "$name" "$hostname" "$IPS" "$OS" "$services")
-		PostToServ "$postdata"
-	fi
+	postdata=$(printf "$JSON" "$name" "$hostname" "$IPS" "$OS" "${checkedservices}" "${checkedcontainerinfo}" "${userinfo::-1}")
+	echo $postdata
+	PostToServ "$postdata"
 }
 
 #banner
