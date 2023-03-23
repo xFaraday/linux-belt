@@ -297,7 +297,7 @@ function ports() {
 			for i in $portlisten; do
 				tmp=$(expr $i + 1 2>/dev/null)
 				if [ $? == 2 ]; then
-					printf "\n"
+					continue
 				else
 					if [[ ! -z "$1" ]]; then
 						var=$(lsof -iTCP:$i -sTCP:LISTEN | awk '{print $2}' | tail -n1)
@@ -317,7 +317,7 @@ function ports() {
 				portfromcut=$(echo $i | cut -d':' -f2)
 				tmp=$(expr $i + 1 2>/dev/null)
 				if [ $? == 2 ]; then
-					printf "\n"
+					continue
 				else
 					if [[ ! -z "$1" ]]; then
 						var=$(fuser $portfromcut/tcp 2>/dev/null)
