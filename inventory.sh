@@ -703,7 +703,6 @@ function ExportToJSON() {
 	services=$(ports "json")
 	checkedservices=$(PrepareArrays $services)
 	userinfo=$(CompileUserInfo)
-	echo $userinfo
 	which docker 1>/dev/null 2>&1 && containerinfo=$(DSuck)
 	checkedcontainerinfo=$(PrepareArrays $containerinfo)
 	
