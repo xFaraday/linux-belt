@@ -666,7 +666,7 @@ DSuck() {
 		jcmds=$(echo ${cmds::-1} | cut -b 2-)
 		ports=$(docker inspect --format='{{.NetworkSettings.Ports}}' $i)
 		jports=$(echo ${ports::-1} | cut -b 5-)
-		docinfo+="{\"name\":\"$jname\",\"status\":\"$jstatus\",\"health\":\"$jhealth\",\"id\":\"$jID\",\"cmd\":\"$jcmds\",\"ports\":\"$jports\"},"
+		docinfo+="{\"name\":\"$jname\",\"status\":\"$jstatus\",\"health\":\"$jhealth\",\"dockerId\":\"$jID\",\"cmd\":\"$jcmds\",\"ports\":\"$jports\"},"
 	done
 	echo -n $docinfo
 }
