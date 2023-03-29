@@ -91,30 +91,70 @@ function mysqlenable() {
     " > /etc/fail2ban/jail.d/mysqlauth.conf
 }
 
-if [ $(systemctl is-active "sshd") == "active" ]; then
-    sshdenable
-fi
-if [ $(systemctl is-active "dropbear") == "active" ]; then
-    dropbearenable
-fi
-if [ $(systemctl is-active "apache2") == "active" ]; then
-    apacheenable
-fi
-if [ $(systemctl is-active "nginx") == "active" ]; then
-    nginxenable
-fi
-if [ $(systemctl is-active "webmin") == "active" ]; then
-    webminenable
-fi
-if [ $(systemctl is-active "proftpd") == "active" ]; then
-    proftpdenable
-fi
-if [ $(systemctl is-active "vsftpd") == "active" ]; then
-    vsftpdenable
-fi
-if [ $(systemctl is-active "mysql") == "active" ]; then
-    mysqlenable
-fi
+function getRuntime() {
+    if [ $(which systemctl) ]; then
+        printf "systemctl"
+    fi
+    if [ $(which service) ]; then
+        printf "service"
+    fi
+}
+
+runtime=$(getRuntime)
+case "$runtime" in
+    "systemctl")
+        if [ $(systemctl is-active "sshd") == "active" ]; then
+            sshdenable
+        fi
+        if [ $(systemctl is-active "dropbear") == "active" ]; then
+            dropbearenable
+        fi
+        if [ $(systemctl is-active "apache2") == "active" ]; then
+            apacheenable
+        fi
+        if [ $(systemctl is-active "nginx") == "active" ]; then
+            nginxenable
+        fi
+        if [ $(systemctl is-active "webmin") == "active" ]; then
+            webminenable
+        fi
+        if [ $(systemctl is-active "proftpd") == "active" ]; then
+            proftpdenable
+        fi
+        if [ $(systemctl is-active "vsftpd") == "active" ]; then
+            vsftpdenable
+        fi
+        if [ $(systemctl is-active "mysql") == "active" ]; then
+            mysqlenable
+        fi
+    ;;
+    "service")
+        if [ $(service status "sshd" | grep -oi "running") == "running" ]; then
+            sshdenable
+        fi
+        if [ $(service status "dropbear" | grep -oi "running") == "running" ]; then
+            dropbearenable
+        fi
+        if [ $(service status "apache2" | grep -oi "running") == "running" ]; then
+            apacheenable
+        fi
+        if [ $(service status "nginx" | grep -oi "running") == "running" ]; then
+            nginxenable
+        fi
+        if [ $(service status "webmin" | grep -oi "running") == "running" ]; then
+            webminenable
+        fi
+        if [ $(service status "proftpd" | grep -oi "running") == "running" ]; then
+            proftpdenable
+        fi
+        if [ $(service status "vsftpd" | grep -oi "running") == "running" ]; then
+            vsftpdenable
+        fi
+        if [ $(service status "mysql" | grep -oi "running") == "running" ]; then
+            mysqlenable
+        fi
+    ;;
+esac
 
 systemctl restart fail2ban
 systemctl enable fail2ban
