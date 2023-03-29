@@ -574,14 +574,21 @@ function CompileUserInfo() {
 			userinfoblock+="\"Passwdage\":\"$lastpasschange\","
 
 			#lastlog
-			lastlogdate=$(lastlog -u $username | awk '{ s = ""; for (i=4; i <= NF; i++) s = s $i " "; print s }' | tail -n 1)
-			userinfoblock+="\"Lastlogon\":\"$lastlogdate\","
-			
-			userinfoblock+="\"BadPasswdAttempts\":\"null\","
+			lastlogdate=$(lastlog -u $username | grep -Eo '[A-Z][a-z]{2} [A-Z][a-z]{2} [ 0-9][0-9] [0-9]{2}:[0-9]{2}:[0-9]{2}')
+
+			if [[ -n $lastlogdate ]]; then
+				userinfoblock+="\"LastLogon\":\"$lastlogdate\","
+			else
+				userinfoblock+="\"LastLogon\":\"None\","
+			fi
+
+			# bad login attempts
+			failedAttempts=$(lastb -F -i -w | awk '{print $1}' | grep $username | wc -l)
+			userinfoblock+="\"BadPasswdAttempts\":\"$failedAttempts\","
 
 			#login count
-			logincount=$(last $i | grep $i | wc -l)
-			userinfoblock+="\"NumofLogons\":\"$logincount\"},"
+			logincount=$(last -F | grep -vE "(reboot|systemd|wtmp)" | awk '{print $1}' | grep $username | wc -l)
+			userinfoblock+="\"NumOfLogons\":\"$logincount\"},"
 	done
 	echo -n "$userinfoblock"
 }
@@ -638,7 +645,7 @@ function dockercheck() {
 PostToServ() {
 	webserv="$ip:10000/api/v1/common/inventory"
 	postdata=$1
-	echo $postdata | jq 
+	# echo $postdata | jq 
 	if [ -x $(which curl) ]; then
 		#add custom user agent
 		curl -H 'Content-Type: application/json' -H "User-Agent: $useragent" -d "$postdata" https://${webserv} --insecure
@@ -661,7 +668,7 @@ DSuck() {
 		jports=$(echo ${ports::-1} | cut -b 5-)
 		docinfo+="{\"name\":\"$jname\",\"status\":\"$jstatus\",\"health\":\"$jhealth\",\"id\":\"$jID\",\"cmd\":\"$jcmds\",\"ports\":\"$jports\"},"
 	done
-	echo -n "$docinfo"
+	echo -n $docinfo
 }
 
 function PrepareArrays() {
@@ -685,7 +692,6 @@ function ExportToJSON() {
 
 	printf "\n\n${BLUE}Exporting to JSON...\n\n${NC}"
 	#json format with or without docker containers
-	which docker 1>/dev/null 2>&1 && JSON='{"name":"%s","hostname":"%s","ip":"%s","OS":"%s","services":[%s], "containers":[%s], "users": [%s]}' || JSON='{"name":"%s","hostname":"%s","ip":"%s","OS":"%s","services":[%s], "users": [%s]}'
 
 
 	#FOR SHARES JUST WAIT TO SEE IF PARSING CAN BE DIFFERENT FOR LINUX
@@ -697,12 +703,20 @@ function ExportToJSON() {
 	services=$(ports "json")
 	checkedservices=$(PrepareArrays $services)
 	userinfo=$(CompileUserInfo)
+	echo $userinfo
 	which docker 1>/dev/null 2>&1 && containerinfo=$(DSuck)
 	checkedcontainerinfo=$(PrepareArrays $containerinfo)
-	#echo -e "${services::-1}\n\n"
-	postdata=$(printf "$JSON" "$name" "$hostname" "$IPS" "$OS" "${checkedservices}" "${userinfo::-1}")
-	echo $postdata
+	
+	# check if docker is installed and that checkedcontainerinfo contains values
+	if command -v docker >/dev/null 2>&1 && [[ -n "$checkedcontainerinfo" ]]; then
+		JSON='{"name":"%s","hostname":"%s","ip":"%s","OS":"%s","services":[%s], "containers":[%s], "users": [%s]}' 
+		postdata=$(printf "$JSON" "$name" "$hostname" "$IPS" "$OS" "${checkedservices}" "${containerinfo}" "${userinfo::-1}")
+	else	
+		JSON='{"name":"%s","hostname":"%s","ip":"%s","OS":"%s","services":[%s], "users": [%s]}'
+		postdata=$(printf "$JSON" "$name" "$hostname" "$IPS" "$OS" "${checkedservices}" "${userinfo::-1}")
+	# echo $postdata
 	PostToServ "$postdata"
+	fi
 }
 
 #banner
