@@ -15,34 +15,108 @@ elif [ $(command -v apk) ]; then # Alpine
     apk add bash fail2ban
 fi
 
-#ADD SUPPORT FOR OTHER DISTROS BECAUSE THE LOGPATH IS DIFF
-
 #configure sshd
 #sed -i '/^[sshd]*/a enabled=true\nmaxretry=3\nfindtime=20m\nbantime=30m' /etc/fail2ban/jail.conf
-printf "[sshd]
-enabled = true
-port = ssh
-filter = sshd
-logpath = /var/log/auth.log
-maxretry = 3
-bantime = 120
-" > /etc/fail2ban/jail.d/ssh.conf
+function sshdenable() {
+    printf "[sshd]
+    enabled = true
+    port = ssh
+    filter = sshd
+    logpath = %(sshd_log)s
+    backend = %(sshd_backend)s
+    maxretry = 3
+    bantime = 120
+    " > /etc/fail2ban/jail.d/ssh.conf
+}
 
-#wordpress
-printf "[wordpress]
-enabled = true
-filter = wordpress
-logpath = /var/log/auth.log
-maxretry = 3
-port = http,https
-bantime = 300
-" > /etc/fail2ban/jail.d/wordpress.conf
+function dropbearenable() {
+    printf "[dropbear]
+    enabled  = true
+    port     = ssh
+    logpath  = %(dropbear_log)s
+    backend  = %(dropbear_backend)s
+    " > /etc/fail2ban/jail.d/dropbear.conf
+}
 
-#add more fail2ban applications
+function apacheenable() {
+    printf "[apache-auth]
+    enabled  = true
+    port     = http,https
+    logpath  = %(apache_error_log)s
+    " > /etc/fail2ban/jail.d/apacheauth.conf
+}
 
+function nginxenable() {
+    printf "[nginx-http-auth]
+    enabled = true
+    mode = normal
+    port    = http,https
+    logpath = %(nginx_error_log)s
+    " > /etc/fail2ban/jail.d/nginxauth.conf
+}
+
+function webminenable() {
+    printf "[webmin-auth]
+    enabled = true
+    port    = 10000
+    logpath = %(syslog_authpriv)s
+    backend = %(syslog_backend)s
+    " > /etc/fail2ban/jail.d/webmin.conf
+}
+
+
+function proftpdenable() {
+    printf "[proftpd]
+    enabled  = true
+    port     = ftp,ftp-data,ftps,ftps-data
+    logpath  = %(proftpd_log)s
+    backend  = %(proftpd_backend)s
+    " > /etc/fail2ban/jail.d/proftpd.conf
+}
+
+function vsftpdenable() {
+    printf "[vsftpd]
+    enabled  = true
+    port     = ftp,ftp-data,ftps,ftps-data
+    logpath  = %(vsftpd_log)s
+    " > /etc/fail2ban/jail.d/vsftpd.conf
+}
+
+function mysqlenable() {
+    printf "[mysqld-auth]
+    enabled  = true
+    port     = 3306
+    logpath  = %(mysql_log)s
+    backend  = %(mysql_backend)s
+    " > /etc/fail2ban/jail.d/mysqlauth.conf
+}
+
+if [ $(systemctl is-active "sshd") == "active" ]; then
+    sshdenable
+fi
+if [ $(systemctl is-active "dropbear") == "active" ]; then
+    dropbearenable
+fi
+if [ $(systemctl is-active "apache2") == "active" ]; then
+    apacheenable
+fi
+if [ $(systemctl is-active "nginx") == "active" ]; then
+    nginxenable
+fi
+if [ $(systemctl is-active "webmin") == "active" ]; then
+    webminenable
+fi
+if [ $(systemctl is-active "proftpd") == "active" ]; then
+    proftpdenable
+fi
+if [ $(systemctl is-active "vsftpd") == "active" ]; then
+    vsftpdenable
+fi
+if [ $(systemctl is-active "mysql") == "active" ]; then
+    mysqlenable
+fi
 
 systemctl restart fail2ban
 systemctl enable fail2ban
-systemctl mask fail2ban
 
 fail2ban-client status
